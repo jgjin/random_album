@@ -9,7 +9,7 @@ use crate::oauth;
 pub struct OAuthToken {
     token: String,
     expiration: DateTime<Utc>,
-    refresh_token: String,
+    refresh_token: Option<String>,
 }
 
 impl TryFrom<oauth::TokenResponse> for OAuthToken {
@@ -28,9 +28,7 @@ impl TryFrom<oauth::TokenResponse> for OAuthToken {
                 .ok_or("Could not interpret expiration time")?,
             refresh_token: token_response
                 .refresh_token()
-                .ok_or("Spotify authorization code flow should always return refresh token!")?
-                .secret()
-                .to_string(),
+                .map(|refresh| refresh.secret().to_string()),
         })
     }
 }
@@ -45,17 +43,20 @@ impl OAuthToken {
     }
 
     fn refresh(&mut self) -> Result<(), &'static str> {
-        let client = oauth::create_client();
-
-        client
-            .exchange_refresh_token(&RefreshToken::new(self.refresh_token.clone()))
-            .request(http_client)
-            .map_err(|_| "Error in refresh token request")
+        self.refresh_token
+            .as_ref()
+            .ok_or("No refresh token found during refresh")
+            .and_then(|ref_token| {
+                oauth::create_client()
+                    .exchange_refresh_token(&RefreshToken::new(ref_token.clone()))
+                    .request(http_client)
+                    .map_err(|_| "Error in refresh token request")
+            })
             .and_then(|token_response| {
                 Self::try_from(token_response).map(|oauth_token| {
                     self.token = oauth_token.token;
                     self.expiration = oauth_token.expiration;
-                    self.refresh_token = oauth_token.refresh_token;
+                    self.refresh_token = oauth_token.refresh_token.or(self.refresh_token.clone());
                 })
             })
     }
