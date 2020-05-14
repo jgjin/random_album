@@ -2,7 +2,7 @@ use chashmap::CHashMap;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use reqwest::blocking::Client;
-use rocket::http::Cookies;
+use rocket::http::{Cookie, Cookies};
 use rocket::response::Redirect;
 use rocket::State;
 use rocket_contrib::templates::Template;
@@ -84,7 +84,11 @@ pub fn next_random_album(
 
             Template::render("random_album", context)
         })
-        .ok_or(Redirect::found("/error"))
+        .ok_or_else(|| {
+            cookies.remove_private(Cookie::named("temp_username"));
+
+            Redirect::found("/")
+        })
 }
 
 fn next_album(
