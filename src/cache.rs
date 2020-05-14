@@ -13,7 +13,7 @@ pub struct Cache {
 impl Cache {
     pub fn new() -> Self {
         Self {
-            cache: RwLock::new(TtlCache::new(12)),
+            cache: RwLock::new(TtlCache::new(12 * 12)),
         }
     }
 
