@@ -9,7 +9,7 @@ use rocket_contrib::templates::Template;
 
 use crate::cache::Cache;
 use crate::oauth::UserState;
-use crate::types::{Paging, SavedAlbum};
+use crate::types::{AlbumJson, Paging, SavedAlbum};
 
 use std::collections::HashMap;
 
@@ -24,65 +24,21 @@ pub fn next_random_album(
         .and_then(|username| {
             oauth_tokens
                 .get_mut(username.value())
-                .and_then(|mut user_state| {
-                    next_album(username.value(), &album_cache, &mut user_state)
-                })
+                .map(|mut user_state| get_albums(username.value(), &album_cache, &mut user_state))
         })
-        .map(|saved_album| {
-            let album = saved_album.album;
+        .and_then(|mut saved_albums| {
+            let albums = saved_albums
+                .drain(..)
+                .map(|saved_album| AlbumJson::from(saved_album))
+                .collect::<Vec<AlbumJson>>();
 
-            let mut context = HashMap::new();
+            serde_json::to_string(&albums).ok().map(|albums_str| {
+                let mut context = HashMap::new();
 
-            context.insert("album_title", Some(album.name));
-            context.insert(
-                "album_url",
-                album.external_urls.get("spotify").map(|url| url.clone()),
-            );
-            context.insert(
-                "artists",
-                Some(
-                    album
-                        .artists
-                        .iter()
-                        .map(|artist| artist.name.clone())
-                        .collect::<Vec<String>>()
-                        .join(", "),
-                ),
-            );
-            context.insert(
-                "copyright",
-                album
-                    .copyrights
-                    .iter()
-                    .filter(|copyright| copyright.copyright_type == "C")
-                    .next()
-                    .or(album.copyrights.first())
-                    .and_then(|copyright| match &copyright.copyright_type[..] {
-                        "C" => {
-                            let mut cleaned = copyright.text.replace("(C)", "©");
-                            if !cleaned.starts_with("©") && !cleaned.starts_with("℗") {
-                                cleaned = format!("© {}", cleaned);
-                            }
+                context.insert("albums", albums_str);
 
-                            Some(cleaned)
-                        }
-                        "P" => {
-                            let mut cleaned = copyright.text.replace("(P)", "℗");
-                            if !cleaned.starts_with("℗") && !cleaned.starts_with("©") {
-                                cleaned = format!("℗ {}", cleaned);
-                            }
-
-                            Some(cleaned)
-                        }
-                        _ => None,
-                    }),
-            );
-            context.insert(
-                "image_url",
-                album.images.first().map(|image| image.url.clone()),
-            );
-
-            Template::render("random_album", context)
+                Template::render("random_album", context)
+            })
         })
         .ok_or_else(|| {
             cookies.remove_private(Cookie::named("temp_username"));
@@ -91,15 +47,15 @@ pub fn next_random_album(
         })
 }
 
-fn next_album(
+fn get_albums(
     username: &str,
     album_cache: &State<Cache>,
     user_state: &mut UserState,
-) -> Option<SavedAlbum> {
-    album_cache.get_next(&username.to_string()).or_else(|| {
-        let client = Client::new();
-
+) -> Vec<SavedAlbum> {
+    let mut albums = album_cache.get(&username.to_string()).unwrap_or_else(|| {
         let mut albums = Vec::new();
+
+        let client = Client::new();
         let mut next_url_opt = Some("https://api.spotify.com/v1/me/albums".to_string());
         while let Some(next_url) = next_url_opt {
             next_url_opt = user_state.token_checked().ok().and_then(|token| {
@@ -117,11 +73,13 @@ fn next_album(
             });
         }
 
-        let mut rng = thread_rng();
-        albums.shuffle(&mut rng);
+        album_cache.insert(username.to_string(), albums.clone());
 
-        album_cache.insert(username.to_string(), albums);
+        albums
+    });
 
-        album_cache.get_next(&username.to_string())
-    })
+    let mut rng = thread_rng();
+    albums.shuffle(&mut rng);
+
+    albums.drain(..144).collect::<Vec<SavedAlbum>>()
 }
