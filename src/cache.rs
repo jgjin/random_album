@@ -17,14 +17,10 @@ impl Cache {
         }
     }
 
-    pub fn get_next(&self, key: &String) -> Option<SavedAlbum> {
-        self.cache.write().ok().and_then(|mut entries| {
-            entries.get_mut(key).and_then(|saved_albums| {
-                saved_albums.pop_front().map(|saved_album| {
-                    saved_albums.push_back(saved_album.clone());
-
-                    saved_album
-                })
+    pub fn get(&self, key: &String) -> Option<Vec<SavedAlbum>> {
+        self.cache.read().ok().and_then(|entries| {
+            entries.get(key).map(|vec_deque| {
+                vec_deque.iter().cloned().collect::<Vec<SavedAlbum>>()
             })
         })
     }
