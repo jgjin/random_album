@@ -30,7 +30,7 @@ impl Cache {
             entries.insert(
                 key,
                 value.drain(..).collect(),
-                Duration::from_secs(30 * 60),
+                Duration::from_secs(12 * 60 * 60),
             )
         });
     }
