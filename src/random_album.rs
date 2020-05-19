@@ -85,5 +85,7 @@ fn get_albums(
     let mut rng = thread_rng();
     albums.shuffle(&mut rng);
 
-    albums.drain(..144).collect::<Vec<SavedAlbum>>()
+    albums.truncate(144);
+
+    albums
 }
