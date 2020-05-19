@@ -27,6 +27,10 @@ pub fn next_random_album(
                 .map(|mut user_state| get_albums(username.value(), &album_cache, &mut user_state))
         })
         .and_then(|mut saved_albums| {
+            if saved_albums.is_empty() {
+                return Some(Template::render("empty", HashMap::<String, String>::new()));
+            }
+
             let albums = saved_albums
                 .drain(..)
                 .map(|saved_album| AlbumJson::from(saved_album))
