@@ -54,7 +54,7 @@ pub fn create_client() -> BasicClient {
     )
 }
 
-#[get("/oauth_callback?<code>&<state>")]
+#[get("/oauth_callback?<code>&<state>", rank = 1)]
 pub fn end_oauth_accept(
     code: &RawStr,
     state: &RawStr,
@@ -95,13 +95,14 @@ pub fn end_oauth_accept(
     return Redirect::found(redirect_url);
 }
 
-#[get("/oauth_callback?error&<state>")]
+#[get("/oauth_callback?<error>&<state>", rank = 2)]
 pub fn end_oauth_deny(
+    error: &RawStr,
     state: &RawStr,
     oauth_tokens: State<CHashMap<String, UserState>>,
 ) -> Redirect {
     let temp_username = state.url_decode_lossy();
     oauth_tokens.remove(&temp_username);
 
-    return Redirect::found("/error");
+    return Redirect::found(format!("/error?reason={}", error));
 }
