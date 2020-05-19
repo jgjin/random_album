@@ -1,4 +1,8 @@
+use rocket_contrib::templates::Template;
+
+use std::collections::HashMap;
+
 #[get("/error")]
-pub fn error() -> String {
-    "Oh no! An error happened (probably in getting Spotify user data)!".to_string()
+pub fn error() -> Template {
+    Template::render("error", HashMap::<String, String>::new())
 }
